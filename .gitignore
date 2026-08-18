@@ -1,0 +1,21 @@
+# compiled viewfinder (built on first run)
+skills/cam/campreview
+*.o
+*.dSYM/
+
+# never ship captured photos or the server token
+shots/
+inbox/
+*.jpg
+*.jpeg
+*.png
+*.heic
+token
+
+# scratch
+.DS_Store
+scratch/
+*.log
+
+# but do allow documentation images
+!docs/**

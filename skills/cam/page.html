@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Cam">
+<meta name="theme-color" content="#0b0d10">
+<title>Cam &rarr; Claude</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  :root {
+    --bg: #0b0d10; --card: #161a20; --line: #262c35;
+    --fg: #eef1f5; --dim: #9aa4b2; --accent: #d97757; --ok: #3fb950;
+  }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg); color: var(--fg);
+    font: 17px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    display: flex; flex-direction: column;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right)
+             env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  header { padding: 22px 20px 10px; }
+  h1 { margin: 0; font-size: 19px; letter-spacing: -0.01em; }
+  #sub { color: var(--dim); font-size: 14px; margin-top: 3px; }
+  main { flex: 1; overflow-y: auto; padding: 10px 20px 20px; }
+  footer { padding: 12px 20px calc(20px + env(safe-area-inset-bottom)); }
+
+  button, label.btn {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    width: 100%; border: 0; border-radius: 16px; cursor: pointer;
+    font: 600 18px/1 -apple-system, system-ui, sans-serif;
+    padding: 20px; color: #fff; background: var(--accent);
+    transition: transform .08s ease, opacity .15s ease;
+  }
+  button:active, label.btn:active { transform: scale(.975); }
+  .ghost { background: var(--card); color: var(--fg); border: 1px solid var(--line);
+           font-size: 16px; padding: 15px; }
+  .send { background: var(--ok); }
+  .row { display: flex; gap: 10px; margin-top: 10px; }
+  .row > * { flex: 1; }
+  input[type=file] { display: none; }
+
+  #grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  figure { margin: 0; position: relative; aspect-ratio: 1; border-radius: 12px;
+           overflow: hidden; background: var(--card); border: 1px solid var(--line); }
+  figure img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  figure.pending img { opacity: .3; }
+  .spin { position: absolute; inset: 0; display: grid; place-items: center;
+          font-size: 12px; color: var(--dim); }
+
+  #bar { display: none; margin-top: 14px; padding: 14px 16px; border-radius: 14px;
+         background: var(--card); border: 1px solid var(--line); }
+  #bar.on { display: block; }
+  #barmsg { font-size: 15px; color: var(--dim); margin-bottom: 12px; text-align: center; }
+  #barmsg b { color: var(--fg); }
+
+  #done { display: none; text-align: center; padding: 40px 10px; }
+  #done.on { display: block; }
+  #done .tick { font-size: 56px; line-height: 1; }
+  #done p { color: var(--dim); margin: 14px 0 26px; }
+  #err { color: #f85149; font-size: 14px; margin-top: 10px; min-height: 1.4em; }
+  .hint { color: var(--dim); font-size: 13px; text-align: center; margin-top: 14px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Cam &rarr; Claude</h1>
+  <div id="sub">Take a photo. It lands in your Claude Code session.</div>
+</header>
+
+<main>
+  <div id="grid"></div>
+  <div id="done">
+    <div class="tick">&#10003;</div>
+    <p>Sent to Claude.</p>
+    <button class="ghost" onclick="reset()">Take more</button>
+    <div class="hint">Run <b>/cam</b> again in Claude Code first, or these will wait for the next run.</div>
+  </div>
+  <div id="err"></div>
+</main>
+
+<footer id="foot">
+  <label class="btn" for="shot">&#128247;&nbsp; Take Photo</label>
+  <input id="shot" type="file" accept="image/*" capture="environment">
+  <div class="row">
+    <label class="btn ghost" for="lib">From Library</label>
+    <input id="lib" type="file" accept="image/*" multiple>
+    <button class="ghost" onclick="sendNow()">Send now</button>
+  </div>
+  <div id="bar">
+    <div id="barmsg">Sending in <b id="cd">4</b>s&hellip;</div>
+    <div class="row">
+      <button class="ghost" onclick="cancelTimer()">&#43; Another photo</button>
+      <button class="send" onclick="sendNow()">Send now</button>
+    </div>
+  </div>
+</footer>
+
+<script>
+  var BASE = location.pathname.replace(/\/+$/, '');
+  var grid = document.getElementById('grid');
+  var bar  = document.getElementById('bar');
+  var cd   = document.getElementById('cd');
+  var err  = document.getElementById('err');
+  var timer = null, left = 0, count = 0, busy = 0;
+
+  document.getElementById('shot').addEventListener('change', pick);
+  document.getElementById('lib').addEventListener('change', pick);
+
+  function pick(e) {
+    var files = Array.prototype.slice.call(e.target.files || []);
+    e.target.value = '';
+    files.forEach(upload);
+  }
+
+  function upload(file) {
+    cancelTimer();
+    err.textContent = '';
+    busy++;
+    var fig = document.createElement('figure');
+    fig.className = 'pending';
+    var img = document.createElement('img');
+    img.src = URL.createObjectURL(file);
+    var sp = document.createElement('div');
+    sp.className = 'spin';
+    sp.textContent = 'sending';
+    fig.appendChild(img); fig.appendChild(sp);
+    grid.appendChild(fig);
+
+    fetch(BASE + '/up?name=' + encodeURIComponent(file.name || 'photo.jpg'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/octet-stream' },
+      body: file
+    }).then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      fig.className = '';
+      sp.remove();
+      count++;
+    }).catch(function (e) {
+      fig.remove();
+      err.textContent = 'Upload failed: ' + e.message + ' - is the Mac still on this network?';
+    }).finally(function () {
+      busy--;
+      if (busy === 0 && count > 0) armTimer();
+    });
+  }
+
+  function armTimer() {
+    left = 4;
+    cd.textContent = left;
+    bar.classList.add('on');
+    timer = setInterval(function () {
+      left--;
+      cd.textContent = left;
+      if (left <= 0) sendNow();
+    }, 1000);
+  }
+
+  function cancelTimer() {
+    if (timer) { clearInterval(timer); timer = null; }
+    bar.classList.remove('on');
+  }
+
+  function sendNow() {
+    cancelTimer();
+    if (!count) { err.textContent = 'Take a photo first.'; return; }
+    fetch(BASE + '/done', { method: 'POST' })
+      .then(function () {
+        document.getElementById('foot').style.display = 'none';
+        grid.style.display = 'none';
+        document.getElementById('done').classList.add('on');
+        document.getElementById('sub').textContent = count + ' photo' + (count === 1 ? '' : 's') + ' sent.';
+      })
+      .catch(function (e) { err.textContent = 'Could not reach the Mac: ' + e.message; });
+  }
+
+  function reset() {
+    count = 0;
+    grid.innerHTML = '';
+    grid.style.display = '';
+    document.getElementById('done').classList.remove('on');
+    document.getElementById('foot').style.display = '';
+    document.getElementById('sub').textContent = 'Take a photo. It lands in your Claude Code session.';
+  }
+</script>
+</body>
+</html>
