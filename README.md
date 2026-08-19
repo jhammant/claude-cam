@@ -1,5 +1,7 @@
 # claude-cam
 
+![claude-cam — the thing you need Claude to see isn't on your screen](docs/social-card.png)
+
 **Show Claude Code something that isn't on your screen.**
 
 You're in the terminal. The thing Claude needs to see is a wiring harness on
