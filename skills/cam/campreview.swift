@@ -9,6 +9,7 @@ var outDir = FileManager.default.currentDirectoryPath
 var wantDevice: String?
 var once = false
 var autoAfter: Double = 0          // self-test hook: capture after N seconds
+var cancelNow = false              // self-test hook: close without capturing
 
 var argv = Array(CommandLine.arguments.dropFirst())
 var ai = 0
@@ -18,6 +19,7 @@ while ai < argv.count {
     case "--device": ai += 1; if ai < argv.count { wantDevice = argv[ai] }
     case "--once":   once = true
     case "--auto":   ai += 1; if ai < argv.count { autoAfter = Double(argv[ai]) ?? 0 }
+    case "--cancel": cancelNow = true
     default: break
     }
     ai += 1
@@ -219,6 +221,10 @@ final class Controller: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate,
                 if ok { self.start(device: chosen) }
                 else { self.flash("camera permission denied - grant it in System Settings > Privacy") }
             }
+        }
+
+        if cancelNow {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { self.finish() }
         }
 
         if autoAfter > 0 {

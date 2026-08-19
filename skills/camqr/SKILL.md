@@ -30,6 +30,9 @@ PHOTOS 2
 
 **Then `Read` every printed path** — that is what puts the images in context.
 
+If it prints `CANCELLED` (exit 0) the user took no photo before the timeout —
+acknowledge it in one line and do not relaunch unless asked.
+
 ## Critical: show the QR
 
 Bash output is not reliably rendered to the user, so **copy the QR block out of

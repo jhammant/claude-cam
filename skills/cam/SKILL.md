@@ -39,8 +39,17 @@ window closes, then prints `PHOTOS n` and the paths.
 - `--timer N` — self-timer: capture N seconds after the first frame, then close.
 - `--once` — close after the first capture. `--device <substr>` — pick a camera.
 
-If it prints `NO_CAMERA` the phone is asleep or out of range: say so and fall
-back to `upload` (QR) rather than retrying.
+### Reading the outcome
+
+| Output | Meaning | What to do |
+|---|---|---|
+| `PHOTOS n` + paths | Captured | `Read` every path |
+| `CANCELLED` (exit 0) | The user closed the window without capturing — they changed their mind | Acknowledge in one line. **Do not** relaunch, retry, or treat it as a failure. |
+| `NO_CAMERA` (exit 3) | Phone asleep or out of range | Say so and offer `upload` (QR) instead of retrying |
+
+Cancelling is a normal, expected outcome — the user is allowed to open the
+viewfinder, decide against it, and close the window. It exits 0 for exactly that
+reason. A timeout on `upload` is the same thing and also exits 0.
 
 ## Away from the desk: `upload` (QR → phone camera)
 

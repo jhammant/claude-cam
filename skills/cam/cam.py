@@ -296,7 +296,8 @@ def cmd_get(args):
     out = claim()
     if not out:
         print("PHOTOS 0")
-        die("no photos arrived before the timeout", 2)
+        print("CANCELLED  no photos before the timeout")
+        return
 
     print(f"PHOTOS {len(out)}")
     for p in out:
@@ -390,6 +391,8 @@ def cmd_preview(args):
         cmd.append("--once")
     if args.timer:
         cmd += ["--auto", str(args.timer)]
+    if args.cancel:
+        cmd.append("--cancel")
     r = subprocess.run(cmd)
     if r.returncode == 3:
         print("NO_CAMERA")
@@ -404,8 +407,11 @@ def cmd_preview(args):
 
     out = claim()
     if not out:
+        # Closing the window without capturing is "I changed my mind", not an
+        # error - exit 0 so callers do not treat it as a failure.
         print("PHOTOS 0")
-        die("the viewfinder closed without capturing anything", 2)
+        print("CANCELLED  viewfinder closed without capturing")
+        return
     print(f"PHOTOS {len(out)}")
     for pth in out:
         print(pth)
@@ -449,6 +455,8 @@ def main():
     v.add_argument("--once", action="store_true", help="close after the first capture")
     v.add_argument("--timer", type=float, default=0,
                    help="self-timer: capture N seconds after the window opens, then close")
+    v.add_argument("--cancel", action="store_true",
+                   help="open then close without capturing (exercises the cancel path)")
     v.set_defaults(func=cmd_preview)
 
     sub.add_parser("serve").set_defaults(func=cmd_serve)
